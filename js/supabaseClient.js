@@ -1,2 +1,0 @@
-const SUPABASE_URL = 'https://blgagbkgnxeqywzhlvrr.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsZ2FnYmtnbnhlcXl3emhsdnJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4NDI4NTcsImV4cCI6MjEwNDQxODg1N30.HFSfSLqw6DgRwvncr7G24F_FU2XogzgLdKFLeIFd5hA';
