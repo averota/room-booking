@@ -79,19 +79,34 @@
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     errorBox.style.display = 'none';
+
+    if (!SUPABASE_CONFIGURED) {
+      errorBox.textContent = "This app isn't connected to Supabase yet — the URL/key in supabaseClient.js still need to be filled in.";
+      errorBox.style.display = 'block';
+      return;
+    }
+
     setLoading(true);
 
     const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value;
 
-    const { error } = await sb.auth.signInWithPassword({ email, password });
+    let result;
+    try {
+      result = await sb.auth.signInWithPassword({ email, password });
+    } catch (err) {
+      setLoading(false);
+      errorBox.textContent = 'Could not reach Supabase. Check your internet connection, or that the URL in supabaseClient.js is correct.';
+      errorBox.style.display = 'block';
+      return;
+    }
 
     setLoading(false);
 
-    if (error) {
-      errorBox.textContent = error.message === 'Invalid login credentials'
+    if (result.error) {
+      errorBox.textContent = result.error.message === 'Invalid login credentials'
         ? "That email or password isn't right. Check with your admin if you're stuck."
-        : error.message;
+        : result.error.message;
       errorBox.style.display = 'block';
       return;
     }

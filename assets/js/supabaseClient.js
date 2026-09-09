@@ -21,3 +21,18 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     detectSessionInUrl: false
   }
 });
+
+// Catches the single most common setup mistake — forgetting to replace
+// the placeholder URL/key above — so it shows up as a clear console
+// warning instead of a confusing "Failed to fetch" during sign-in.
+const SUPABASE_CONFIGURED =
+  !SUPABASE_URL.includes('YOUR-PROJECT-REF') &&
+  !SUPABASE_ANON_KEY.includes('YOUR-ANON-PUBLIC-KEY') &&
+  SUPABASE_URL.startsWith('https://');
+
+if (!SUPABASE_CONFIGURED) {
+  console.warn(
+    '[Roombook] SUPABASE_URL/SUPABASE_ANON_KEY in assets/js/supabaseClient.js still look like placeholders. ' +
+    'Sign-in will fail until you paste in your real Project URL and anon key from Supabase → Project Settings → API.'
+  );
+}

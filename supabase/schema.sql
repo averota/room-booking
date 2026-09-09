@@ -5,6 +5,8 @@
 
 -- Needed for gen_random_uuid()
 create extension if not exists pgcrypto;
+-- Needed for the exclusion constraint below (lets a gist index use "=" on uuid)
+create extension if not exists btree_gist;
 
 -- ---------------------------------------------------------------------
 -- 1. PROFILES  (one row per auth.users, holds the role)
@@ -88,6 +90,20 @@ create index if not exists idx_bookings_room_time on public.bookings (room_id, s
 create index if not exists idx_bookings_user on public.bookings (user_id);
 create index if not exists idx_bookings_group on public.bookings (recurrence_group_id);
 
+-- Belt-and-braces overlap prevention: the app checks for conflicts in
+-- JavaScript before inserting, but that check-then-insert has a small
+-- race window if two people submit at the exact same moment. This
+-- constraint makes the database itself refuse any overlapping time
+-- range for the same room, so a double-booking is never physically
+-- possible even if the client-side check is bypassed or racy.
+alter table public.bookings drop constraint if exists bookings_no_overlap;
+alter table public.bookings
+  add constraint bookings_no_overlap
+  exclude using gist (
+    room_id with =,
+    tstzrange(start_time, end_time, '[)') with &&
+  );
+
 -- ---------------------------------------------------------------------
 -- 4. ROW LEVEL SECURITY
 -- ---------------------------------------------------------------------
@@ -150,4 +166,9 @@ on conflict do nothing;
 --   3. To make someone an admin, run:
 --        update public.profiles set role = 'admin' where id =
 --          (select id from auth.users where email = 'admin@example.com');
+--
+-- Note: if you're re-running this on a database that already has test
+-- bookings with overlapping times, the new bookings_no_overlap
+-- constraint at the bottom will fail to apply until those overlaps are
+-- removed. On a fresh project this just works.
 -- ---------------------------------------------------------------------

@@ -309,6 +309,15 @@ function wireBookingForm() {
     document.getElementById('recurrenceEndFields').classList.toggle('show', show);
   });
 
+  const dateInput = document.getElementById('bookingDate');
+  const untilInput = document.getElementById('recurrenceUntil');
+  dateInput.addEventListener('change', () => {
+    untilInput.min = dateInput.value;
+    if (untilInput.value && dateStrBefore(untilInput.value, dateInput.value)) {
+      untilInput.value = dateInput.value;
+    }
+  });
+
   document.getElementById('bookingForm').addEventListener('submit', onSubmitBooking);
 }
 
@@ -331,12 +340,8 @@ function openBookingModal(defaultDate, existingBooking = null) {
     document.getElementById('bookingDate').value = dateKey(s);
     document.getElementById('bookingStart').value = `${pad2(s.getHours())}:${pad2(s.getMinutes())}`;
     document.getElementById('bookingEnd').value = `${pad2(e.getHours())}:${pad2(e.getMinutes())}`;
-    document.getElementById('recurrenceGroup').style.display = existingBooking.recurrence_group_id ? 'none' : 'block';
-    if (existingBooking.recurrence_group_id) {
-      document.getElementById('editRecurrenceNote').style.display = 'block';
-    } else {
-      document.getElementById('editRecurrenceNote').style.display = 'none';
-    }
+    document.getElementById('recurrenceGroup').style.display = 'none';
+    document.getElementById('editRecurrenceNote').style.display = existingBooking.recurrence_group_id ? 'block' : 'none';
   } else {
     state.editingBookingId = null;
     document.getElementById('bookingModalTitle').textContent = 'New booking';
@@ -348,6 +353,7 @@ function openBookingModal(defaultDate, existingBooking = null) {
     document.getElementById('editRecurrenceNote').style.display = 'none';
   }
 
+  document.getElementById('recurrenceUntil').min = document.getElementById('bookingDate').value;
   bookingModal.show();
 }
 
@@ -406,7 +412,14 @@ async function submitEdit(bookingId, start, end, topic) {
     .update({ topic, start_time: start.toISOString(), end_time: end.toISOString() })
     .eq('id', bookingId);
 
-  if (error) { showToast('Could not save changes: ' + error.message, 'danger'); return; }
+  if (error) {
+    if (isOverlapViolation(error)) {
+      showToast('That time now clashes with another booking — please pick another slot.', 'danger');
+    } else {
+      showToast('Could not save changes: ' + error.message, 'danger');
+    }
+    return;
+  }
   showToast('Booking updated.', 'success');
   bookingModal.hide();
   await loadBookingsAndRender();
@@ -417,8 +430,12 @@ async function submitCreate(start, end, topic, rule, untilStr) {
     showToast('Please choose an end date for the recurrence.', 'danger');
     return;
   }
+  if (rule && dateStrBefore(untilStr, document.getElementById('bookingDate').value)) {
+    showToast('The recurrence end date can’t be before the booking date.', 'danger');
+    return;
+  }
 
-  const occurrences = expandOccurrences(start, end, rule, untilStr);
+  const { occurrences, truncated } = expandOccurrences(start, end, rule, untilStr);
   const conflicts = await checkConflicts(state.selectedRoomId, occurrences, null);
 
   if (conflicts.length > 0) {
@@ -438,11 +455,26 @@ async function submitCreate(start, end, topic, rule, untilStr) {
   }));
 
   const { error } = await sb.from('bookings').insert(rows);
-  if (error) { showToast('Could not create booking: ' + error.message, 'danger'); return; }
+  if (error) {
+    if (isOverlapViolation(error)) {
+      showToast('Someone booked that slot moments ago — please pick another time.', 'danger');
+    } else {
+      showToast('Could not create booking: ' + error.message, 'danger');
+    }
+    return;
+  }
 
+  if (truncated) {
+    showToast(`Recurrence was capped at ${MAX_OCCURRENCES} occurrences; booked through then. Shorten the end date to cover a smaller range if you need every date.`, 'accent');
+  }
   showToast(occurrences.length > 1 ? `Booked ${occurrences.length} occurrences.` : 'Booking created.', 'success');
   bookingModal.hide();
   await loadBookingsAndRender();
+}
+
+/** Postgres exclusion-constraint violation code — our belt-and-braces DB guard against overlaps. */
+function isOverlapViolation(error) {
+  return error && (error.code === '23P01' || /exclusion/i.test(error.message || ''));
 }
 
 async function checkConflicts(roomId, occurrences, excludeBookingId) {
@@ -484,10 +516,4 @@ function renderConflicts(conflicts) {
   const extra = conflicts.length > 8 ? `<li>…and ${conflicts.length - 8} more</li>` : '';
   box.innerHTML = `<strong>This room is already booked at that time.</strong><ul>${items}${extra}</ul>`;
   box.style.display = 'block';
-}
-
-function escapeHtml(str) {
-  const d = document.createElement('div');
-  d.textContent = str ?? '';
-  return d.innerHTML;
 }

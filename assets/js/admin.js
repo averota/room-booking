@@ -141,9 +141,3 @@ async function onDeleteRoom(room) {
   showToast('Room deleted.', 'success');
   await loadRooms();
 }
-
-function escapeHtml(str) {
-  const d = document.createElement('div');
-  d.textContent = str ?? '';
-  return d.innerHTML;
-}

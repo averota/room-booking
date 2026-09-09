@@ -61,44 +61,78 @@ function addDaysLocal(date, days) {
 }
 
 /**
+ * Add `months` calendar months to `date`, clamping the day-of-month so it
+ * never overflows into a later month. Plain `setMonth()` doesn't do this:
+ * Jan 31 + 1 month naively becomes Mar 3 (Feb only has 28/29 days), which
+ * silently shifts a recurring booking's weekday/date every time it crosses
+ * a short month. Clamping keeps "the 31st" landing on the last day of
+ * shorter months instead, which is what people actually expect from a
+ * monthly recurrence.
+ */
+function addMonthsClamped(date, months) {
+  const day = date.getDate();
+  const d = new Date(date);
+  d.setDate(1); // avoid overflow while switching months
+  d.setMonth(d.getMonth() + months);
+  const daysInTarget = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, daysInTarget));
+  d.setHours(date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds());
+  return d;
+}
+
+/** Same idea as addMonthsClamped, for the Feb 29 -> Feb 28 case on yearly recurrence. */
+function addYearsClamped(date, years) {
+  return addMonthsClamped(date, years * 12);
+}
+
+const MAX_OCCURRENCES = 366;
+
+/**
  * Expand a booking into occurrence [start, end] pairs based on a recurrence
  * rule. `rule` is one of null, 'daily', 'weekly', 'monthly', 'yearly'.
- * Caps at 366 occurrences as a safety net against runaway ranges.
+ * Returns { occurrences, truncated } — `truncated` is true if the safety
+ * cap was hit before reaching `untilDateStr`, so the caller can warn the
+ * person their series was cut short instead of silently under-booking.
+ *
+ * Each occurrence is computed directly from the ORIGINAL start date
+ * (start + N days/weeks/months/years), not from the previous occurrence.
+ * Advancing from the previous one would compound date-clamping: e.g. a
+ * "31st of the month" booking would clamp to Feb 28, and if the *next*
+ * step advanced from that Feb 28 instead of the original Jan 31, every
+ * later month would drift to the 28th too, instead of correctly bouncing
+ * back to the 30th/31st once the month is long enough again.
  */
 function expandOccurrences(startDate, endDate, rule, untilDateStr) {
   const duration = endDate.getTime() - startDate.getTime();
   const occurrences = [{ start: new Date(startDate), end: new Date(endDate) }];
 
-  if (!rule || rule === 'none') return occurrences;
+  if (!rule || rule === 'none') return { occurrences, truncated: false };
 
   const until = combineDateTime(untilDateStr, '23:59');
-  let cursor = new Date(startDate);
-  let guard = 0;
+  let truncated = false;
 
-  while (guard < 366) {
-    guard += 1;
-    let next;
-    if (rule === 'daily') next = addDaysLocal(cursor, 1);
-    else if (rule === 'weekly') next = addDaysLocal(cursor, 7);
-    else if (rule === 'monthly') {
-      next = new Date(cursor);
-      next.setMonth(next.getMonth() + 1);
-    } else if (rule === 'yearly') {
-      next = new Date(cursor);
-      next.setFullYear(next.getFullYear() + 1);
-    } else {
+  // Loop one step past the cap on purpose: if that extra occurrence would
+  // still fall within `until`, we know occurrences were genuinely cut off
+  // (rather than the cap coincidentally landing right on the last one).
+  for (let n = 1; n <= MAX_OCCURRENCES + 1; n++) {
+    let occStart;
+    if (rule === 'daily') occStart = addDaysLocal(startDate, n);
+    else if (rule === 'weekly') occStart = addDaysLocal(startDate, n * 7);
+    else if (rule === 'monthly') occStart = addMonthsClamped(startDate, n);
+    else if (rule === 'yearly') occStart = addYearsClamped(startDate, n);
+    else break;
+
+    if (occStart.getTime() > until.getTime()) break;
+
+    if (n > MAX_OCCURRENCES) {
+      truncated = true;
       break;
     }
 
-    if (next.getTime() > until.getTime()) break;
-
-    const occStart = next;
-    const occEnd = new Date(occStart.getTime() + duration);
-    occurrences.push({ start: occStart, end: occEnd });
-    cursor = next;
+    occurrences.push({ start: occStart, end: new Date(occStart.getTime() + duration) });
   }
 
-  return occurrences;
+  return { occurrences, truncated };
 }
 
 /** True if [aStart,aEnd) overlaps [bStart,bEnd) */
@@ -108,4 +142,16 @@ function rangesOverlap(aStart, aEnd, bStart, bEnd) {
 
 function recurrenceLabel(rule) {
   return { daily: 'Repeats daily', weekly: 'Repeats weekly', monthly: 'Repeats monthly', yearly: 'Repeats yearly' }[rule] || '';
+}
+
+/** True if yyyy-mm-dd string `a` is strictly before yyyy-mm-dd string `b`. */
+function dateStrBefore(a, b) {
+  return a < b; // safe lexicographic comparison for zero-padded yyyy-mm-dd
+}
+
+/** Escapes text for safe insertion into innerHTML. Shared by calendar.js and admin.js. */
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str ?? '';
+  return d.innerHTML;
 }
