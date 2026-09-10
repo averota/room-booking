@@ -126,7 +126,7 @@ async function loadBookingsAndRender() {
 
   const { data, error } = await sb
     .from('bookings')
-    .select('id, room_id, user_id, topic, start_time, end_time, recurrence_group_id, recurrence_rule, profiles(full_name)')
+    .select('id, room_id, user_id, topic, start_time, end_time, recurrence_group_id, recurrence_rule, invitees, profiles(full_name)')
     .eq('room_id', state.selectedRoomId)
     .lt('start_time', gridEnd.toISOString())
     .gt('end_time', gridStart.toISOString())
@@ -234,6 +234,7 @@ function renderBookingRow(b) {
         Booked by ${escapeHtml(bookedByName)}
         ${b.recurrence_group_id ? `<span class="badge badge-soft-accent ms-1">${recurrenceLabel(b.recurrence_rule)}</span>` : ''}
       </div>
+      ${b.invitees ? `<div class="invitee-row">${inviteeChipsHtml(b.invitees)}</div>` : ''}
     </div>
     <div class="d-flex flex-column gap-1 align-items-end" style="min-width:110px;"></div>
   `;
@@ -266,20 +267,29 @@ function renderBookingRow(b) {
 
 async function confirmCancel(booking) {
   if (booking.recurrence_group_id) {
-    const choice = window.prompt(
-      'This booking is part of a recurring series.\nType "one" to cancel just this occurrence, or "series" to cancel the entire series.',
-      'one'
-    );
-    if (choice === null) return;
-    if (choice.trim().toLowerCase().startsWith('series')) {
-      await cancelSeries(booking.recurrence_group_id);
-      return;
-    }
+    const choice = await showConfirmDialog({
+      title: 'Cancel booking',
+      message: `This booking is part of a recurring series (${recurrenceLabel(booking.recurrence_rule).toLowerCase()}). What would you like to cancel?`,
+      confirmLabel: 'Cancel booking',
+      danger: true,
+      choices: [
+        { value: 'one', label: 'Just this occurrence', hint: formatDateLong(new Date(booking.start_time)) },
+        { value: 'series', label: 'The entire series', hint: 'Removes every date in this recurring booking' }
+      ]
+    });
+    if (!choice) return;
+    if (choice === 'series') { await cancelSeries(booking.recurrence_group_id); return; }
     await cancelSingle(booking.id);
     return;
   }
 
-  if (!window.confirm('Cancel this booking?')) return;
+  const ok = await showConfirmDialog({
+    title: 'Cancel booking',
+    message: `Cancel “${escapeHtml(booking.topic)}” on ${formatDateLong(new Date(booking.start_time))}?`,
+    confirmLabel: 'Cancel booking',
+    danger: true
+  });
+  if (!ok) return;
   await cancelSingle(booking.id);
 }
 
@@ -318,6 +328,10 @@ function wireBookingForm() {
     }
   });
 
+  document.getElementById('bookingInvitees').addEventListener('input', (e) => {
+    document.getElementById('inviteePreview').innerHTML = inviteeChipsHtml(e.target.value);
+  });
+
   document.getElementById('bookingForm').addEventListener('submit', onSubmitBooking);
 }
 
@@ -326,6 +340,7 @@ function openBookingModal(defaultDate, existingBooking = null) {
   form.reset();
   document.getElementById('conflictAlert').style.display = 'none';
   document.getElementById('recurrenceEndFields').classList.remove('show');
+  document.getElementById('inviteePreview').innerHTML = '';
 
   const room = state.rooms.find((r) => r.id === state.selectedRoomId);
   document.getElementById('bookingModalRoom').textContent = room ? room.name : '';
@@ -340,6 +355,8 @@ function openBookingModal(defaultDate, existingBooking = null) {
     document.getElementById('bookingDate').value = dateKey(s);
     document.getElementById('bookingStart').value = `${pad2(s.getHours())}:${pad2(s.getMinutes())}`;
     document.getElementById('bookingEnd').value = `${pad2(e.getHours())}:${pad2(e.getMinutes())}`;
+    document.getElementById('bookingInvitees').value = existingBooking.invitees || '';
+    document.getElementById('inviteePreview').innerHTML = inviteeChipsHtml(existingBooking.invitees || '');
     document.getElementById('recurrenceGroup').style.display = 'none';
     document.getElementById('editRecurrenceNote').style.display = existingBooking.recurrence_group_id ? 'block' : 'none';
   } else {
@@ -347,10 +364,13 @@ function openBookingModal(defaultDate, existingBooking = null) {
     document.getElementById('bookingModalTitle').textContent = 'New booking';
     document.getElementById('bookingSubmitLabel').textContent = 'Create booking';
     document.getElementById('bookingDate').value = dateKey(defaultDate);
-    document.getElementById('bookingStart').value = '09:00';
-    document.getElementById('bookingEnd').value = '10:00';
+    const suggested = suggestedTimeRange(defaultDate);
+    document.getElementById('bookingStart').value = suggested.start;
+    document.getElementById('bookingEnd').value = suggested.end;
     document.getElementById('recurrenceGroup').style.display = 'block';
     document.getElementById('editRecurrenceNote').style.display = 'none';
+    document.getElementById('ignoreSaturday').checked = true;
+    document.getElementById('ignoreSunday').checked = true;
   }
 
   document.getElementById('recurrenceUntil').min = document.getElementById('bookingDate').value;
@@ -366,6 +386,7 @@ async function onSubmitBooking(e) {
   const startStr = document.getElementById('bookingStart').value;
   const endStr = document.getElementById('bookingEnd').value;
   const topic = document.getElementById('bookingTopic').value.trim();
+  const invitees = parseInvitees(document.getElementById('bookingInvitees').value).join(', ');
 
   if (!dateStr || !startStr || !endStr || !topic) {
     showToast('Please fill in all required fields.', 'danger');
@@ -389,18 +410,20 @@ async function onSubmitBooking(e) {
 
   try {
     if (state.editingBookingId) {
-      await submitEdit(state.editingBookingId, start, end, topic);
+      await submitEdit(state.editingBookingId, start, end, topic, invitees);
     } else {
       const rule = document.getElementById('recurrenceSelect').value;
       const untilStr = document.getElementById('recurrenceUntil').value;
-      await submitCreate(start, end, topic, rule === 'none' ? null : rule, untilStr);
+      const ignoreSaturday = document.getElementById('ignoreSaturday').checked;
+      const ignoreSunday = document.getElementById('ignoreSunday').checked;
+      await submitCreate(start, end, topic, invitees, rule === 'none' ? null : rule, untilStr, ignoreSaturday, ignoreSunday);
     }
   } finally {
     submitBtn.disabled = false;
   }
 }
 
-async function submitEdit(bookingId, start, end, topic) {
+async function submitEdit(bookingId, start, end, topic, invitees) {
   const conflicts = await checkConflicts(state.selectedRoomId, [{ start, end }], bookingId);
   if (conflicts.length > 0) {
     renderConflicts(conflicts);
@@ -409,7 +432,7 @@ async function submitEdit(bookingId, start, end, topic) {
 
   const { error } = await sb
     .from('bookings')
-    .update({ topic, start_time: start.toISOString(), end_time: end.toISOString() })
+    .update({ topic, start_time: start.toISOString(), end_time: end.toISOString(), invitees: invitees || null })
     .eq('id', bookingId);
 
   if (error) {
@@ -425,7 +448,7 @@ async function submitEdit(bookingId, start, end, topic) {
   await loadBookingsAndRender();
 }
 
-async function submitCreate(start, end, topic, rule, untilStr) {
+async function submitCreate(start, end, topic, invitees, rule, untilStr, ignoreSaturday, ignoreSunday) {
   if (rule && !untilStr) {
     showToast('Please choose an end date for the recurrence.', 'danger');
     return;
@@ -435,7 +458,10 @@ async function submitCreate(start, end, topic, rule, untilStr) {
     return;
   }
 
-  const { occurrences, truncated } = expandOccurrences(start, end, rule, untilStr);
+  let { occurrences, truncated } = expandOccurrences(start, end, rule, untilStr);
+  if (rule) {
+    occurrences = applyWeekendSkip(occurrences, ignoreSaturday, ignoreSunday);
+  }
   const conflicts = await checkConflicts(state.selectedRoomId, occurrences, null);
 
   if (conflicts.length > 0) {
@@ -448,6 +474,7 @@ async function submitCreate(start, end, topic, rule, untilStr) {
     room_id: state.selectedRoomId,
     user_id: state.me.profile.id,
     topic,
+    invitees: invitees || null,
     start_time: occ.start.toISOString(),
     end_time: occ.end.toISOString(),
     recurrence_group_id: recurrenceGroupId,

@@ -128,9 +128,12 @@ async function onSubmitRoom(e) {
 }
 
 async function onDeleteRoom(room) {
-  const ok = window.confirm(
-    `Delete "${room.name}"? This also deletes every booking made for this room. This can't be undone.`
-  );
+  const ok = await showConfirmDialog({
+    title: 'Delete room',
+    message: `Delete “${escapeHtml(room.name)}”? This also deletes every booking made for this room. This can't be undone.`,
+    confirmLabel: 'Delete room',
+    danger: true
+  });
   if (!ok) return;
 
   const { error } = await sb.from('rooms').delete().eq('id', room.id);

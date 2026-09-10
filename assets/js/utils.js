@@ -155,3 +155,153 @@ function escapeHtml(str) {
   d.textContent = str ?? '';
   return d.innerHTML;
 }
+
+// ---------------------------------------------------------------------
+// Shared confirm dialog (replaces window.confirm/prompt with a modal).
+// Usage:
+//   const ok = await showConfirmDialog({ title, message, confirmLabel, danger });
+//   const which = await showConfirmDialog({ title, message, confirmLabel, danger, choices: [...] });
+// Resolves to `null` if dismissed, otherwise `true` (no choices) or the
+// selected choice's value (radio choices).
+// ---------------------------------------------------------------------
+function showConfirmDialog({ title, message, confirmLabel = 'Confirm', danger = false, choices = null }) {
+  return new Promise((resolve) => {
+    const existing = document.getElementById('sharedConfirmModal');
+    if (existing) existing.remove();
+
+    const choicesHtml = choices
+      ? `<div class="confirm-choice-group">${choices.map((c, i) => `
+          <label class="confirm-choice">
+            <input type="radio" name="confirmChoice" value="${escapeHtml(c.value)}" ${i === 0 ? 'checked' : ''}>
+            <span>
+              <span class="confirm-choice-title">${escapeHtml(c.label)}</span>
+              ${c.hint ? `<span class="confirm-choice-hint">${escapeHtml(c.hint)}</span>` : ''}
+            </span>
+          </label>`).join('')}</div>`
+      : '';
+
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div class="modal fade" id="sharedConfirmModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">${escapeHtml(title)}</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <p class="${choices ? 'mb-3' : 'mb-0'}">${message}</p>
+              ${choicesHtml}
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Never mind</button>
+              <button type="button" class="btn ${danger ? 'btn-danger' : 'btn-accent'}" id="sharedConfirmBtn">${escapeHtml(confirmLabel)}</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(wrap.firstElementChild);
+
+    const modalEl = document.getElementById('sharedConfirmModal');
+    const modal = new bootstrap.Modal(modalEl);
+    let resolved = false;
+
+    modalEl.querySelector('#sharedConfirmBtn').addEventListener('click', () => {
+      resolved = true;
+      let value = true;
+      if (choices) {
+        const checked = modalEl.querySelector('input[name="confirmChoice"]:checked');
+        value = checked ? checked.value : choices[0].value;
+      }
+      modal.hide();
+      resolve(value);
+    });
+
+    modalEl.addEventListener('hidden.bs.modal', () => {
+      modalEl.remove();
+      if (!resolved) resolve(null);
+    });
+
+    modal.show();
+  });
+}
+
+// ---------------------------------------------------------------------
+// Weekend handling for recurring bookings
+// ---------------------------------------------------------------------
+
+/** Walks a date backward off Saturday/Sunday (whichever are ignored) onto the last non-ignored weekday. */
+function shiftAwayFromIgnoredWeekend(date, ignoreSaturday, ignoreSunday) {
+  const d = new Date(date);
+  let guard = 0;
+  while (guard < 7) {
+    const day = d.getDay(); // 0 = Sun, 6 = Sat
+    if ((day === 6 && ignoreSaturday) || (day === 0 && ignoreSunday)) {
+      d.setDate(d.getDate() - 1);
+      guard++;
+      continue;
+    }
+    break;
+  }
+  return d;
+}
+
+/**
+ * Re-dates every occurrence that falls on an ignored weekend day to the
+ * closest earlier weekday. If two occurrences land on the same shifted
+ * date (e.g. a daily series with both weekend days ignored can push a
+ * Saturday and Sunday occurrence both back onto the same Friday), the
+ * later duplicate is dropped rather than double-booking the same slot.
+ */
+function applyWeekendSkip(occurrences, ignoreSaturday, ignoreSunday) {
+  if (!ignoreSaturday && !ignoreSunday) return occurrences;
+
+  const seen = new Set();
+  const result = [];
+  for (const occ of occurrences) {
+    const duration = occ.end.getTime() - occ.start.getTime();
+    const shiftedStart = shiftAwayFromIgnoredWeekend(occ.start, ignoreSaturday, ignoreSunday);
+    const key = shiftedStart.getTime();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push({ start: shiftedStart, end: new Date(shiftedStart.getTime() + duration) });
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------
+// Invitees (informational, free-text, comma-separated)
+// ---------------------------------------------------------------------
+
+function parseInvitees(text) {
+  return (text || '').split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+const INVITEE_CHIP_PALETTE = [
+  { bg: 'var(--accent-soft)', fg: 'var(--accent-dark)' },
+  { bg: 'var(--warning-soft)', fg: 'var(--warning)' },
+  { bg: 'var(--success-soft)', fg: 'var(--success)' },
+  { bg: '#E6E9F5', fg: '#3D4A9E' },
+  { bg: '#F5E6F0', fg: '#9E3D7C' }
+];
+
+/** Renders each invitee as a small pill, cycling through a palette so names stay visually distinct. */
+function inviteeChipsHtml(text) {
+  return parseInvitees(text)
+    .map((name, i) => {
+      const c = INVITEE_CHIP_PALETTE[i % INVITEE_CHIP_PALETTE.length];
+      return `<span class="invitee-chip" style="background:${c.bg}; color:${c.fg};">${escapeHtml(name)}</span>`;
+    })
+    .join('');
+}
+
+// ---------------------------------------------------------------------
+// Smart default booking time: next hour if the date is today, else 8 AM.
+// ---------------------------------------------------------------------
+function suggestedTimeRange(date) {
+  const now = new Date();
+  let startHour = dateKey(date) === dateKey(now) ? now.getHours() + 1 : 8;
+  startHour = Math.min(Math.max(startHour, 0), 22); // keep room for a 1hr slot before midnight
+  const endHour = startHour + 1;
+  return { start: `${pad2(startHour)}:00`, end: `${pad2(endHour)}:00` };
+}

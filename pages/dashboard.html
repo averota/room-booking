@@ -121,19 +121,26 @@
             <input type="text" class="form-control" id="bookingTopic" placeholder="e.g. Sprint planning" required>
           </div>
 
+          <div class="mb-3">
+            <label class="form-label">Date</label>
+            <input type="date" class="form-control" id="bookingDate" required>
+          </div>
+
           <div class="row g-2 mb-3">
-            <div class="col-5">
-              <label class="form-label">Date</label>
-              <input type="date" class="form-control" id="bookingDate" required>
-            </div>
-            <div class="col">
+            <div class="col-12 col-sm-6">
               <label class="form-label">Start</label>
               <input type="time" class="form-control" id="bookingStart" required>
             </div>
-            <div class="col">
+            <div class="col-12 col-sm-6">
               <label class="form-label">End</label>
               <input type="time" class="form-control" id="bookingEnd" required>
             </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Invitees <span class="text-muted fw-normal">(optional, informational only)</span></label>
+            <input type="text" class="form-control" id="bookingInvitees" placeholder="e.g. Alice, Bob, Charlie">
+            <div id="inviteePreview" class="invitee-preview"></div>
           </div>
 
           <div id="recurrenceGroup">
@@ -149,7 +156,15 @@
             </div>
             <div id="recurrenceEndFields" class="recurrence-fields mb-1">
               <label class="form-label">Repeat until</label>
-              <input type="date" class="form-control" id="recurrenceUntil">
+              <input type="date" class="form-control mb-2" id="recurrenceUntil">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="ignoreSaturday" checked>
+                <label class="form-check-label" for="ignoreSaturday">Ignore Saturday <span class="text-muted">(move to Friday)</span></label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="ignoreSunday" checked>
+                <label class="form-check-label" for="ignoreSunday">Ignore Sunday <span class="text-muted">(move to Saturday, or Friday if that's also ignored)</span></label>
+              </div>
             </div>
           </div>
 

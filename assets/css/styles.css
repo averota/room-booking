@@ -197,6 +197,9 @@ a:hover { color: var(--accent-dark); }
 /* App shell                                                        */
 /* ---------------------------------------------------------------- */
 .app-nav {
+  position: sticky;
+  top: 0;
+  z-index: 1030;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   padding: 0 24px;
@@ -416,6 +419,27 @@ a:hover { color: var(--accent-dark); }
   padding-left: 6px;
 }
 
+/* Weekend styling: Sunday = day off (red tint), Saturday = weekend (gray tint) */
+.weekday-row div:first-child { color: var(--danger); }
+.weekday-row div:last-child { color: var(--ink-soft); }
+
+.calendar-grid .day-cell:nth-child(7n+1) { background: var(--danger-soft); }
+.calendar-grid .day-cell:nth-child(7n+1):not(.today) .date-num { color: var(--danger); }
+.calendar-grid .day-cell:nth-child(7n+1):hover { background: #F3DCD5; }
+
+.calendar-grid .day-cell:nth-child(7n) { background: #EEF0F2; }
+.calendar-grid .day-cell:nth-child(7n):not(.today) .date-num { color: var(--ink-soft); }
+.calendar-grid .day-cell:nth-child(7n):hover { background: #E5E8EB; }
+
+.calendar-grid .day-cell.outside:nth-child(7n+1),
+.calendar-grid .day-cell.outside:nth-child(7n) {
+  background: #FAFBFC;
+}
+.calendar-grid .day-cell.outside:nth-child(7n+1) .date-num,
+.calendar-grid .day-cell.outside:nth-child(7n) .date-num {
+  color: var(--ink-faint);
+}
+
 /* ---------------------------------------------------------------- */
 /* Booking list / modal                                             */
 /* ---------------------------------------------------------------- */
@@ -502,4 +526,54 @@ a:hover { color: var(--accent-dark); }
   top: 20px;
   right: 20px;
   z-index: 1080;
+}
+
+/* ---------------------------------------------------------------- */
+/* Shared confirm dialog (cancel booking / delete room, etc.)       */
+/* ---------------------------------------------------------------- */
+.confirm-choice-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.confirm-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color .12s ease, background .12s ease;
+}
+.confirm-choice:hover { border-color: var(--accent); background: var(--bg); }
+.confirm-choice input[type="radio"] { margin-top: 3px; }
+.confirm-choice-title { display: block; font-weight: 600; font-size: 0.92rem; }
+.confirm-choice-hint { display: block; font-size: 0.8rem; color: var(--ink-faint); }
+
+/* ---------------------------------------------------------------- */
+/* Invitees (informational chips)                                   */
+/* ---------------------------------------------------------------- */
+.invitee-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+  min-height: 0;
+}
+
+.invitee-chip {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.invitee-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
 }

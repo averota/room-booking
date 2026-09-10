@@ -78,6 +78,7 @@ create table if not exists public.bookings (
   room_id              uuid not null references public.rooms (id) on delete cascade,
   user_id              uuid not null references public.profiles (id) on delete cascade,
   topic                text not null,
+  invitees             text,               -- optional, free-text, comma-separated, informational only
   start_time           timestamptz not null,
   end_time             timestamptz not null,
   recurrence_group_id  uuid,               -- null for one-off bookings
@@ -90,20 +91,6 @@ create index if not exists idx_bookings_room_time on public.bookings (room_id, s
 create index if not exists idx_bookings_user on public.bookings (user_id);
 create index if not exists idx_bookings_group on public.bookings (recurrence_group_id);
 
--- Belt-and-braces overlap prevention: the app checks for conflicts in
--- JavaScript before inserting, but that check-then-insert has a small
--- race window if two people submit at the exact same moment. This
--- constraint makes the database itself refuse any overlapping time
--- range for the same room, so a double-booking is never physically
--- possible even if the client-side check is bypassed or racy.
-alter table public.bookings drop constraint if exists bookings_no_overlap;
-alter table public.bookings
-  add constraint bookings_no_overlap
-  exclude using gist (
-    room_id with =,
-    tstzrange(start_time, end_time, '[)') with &&
-  );
-
 -- ---------------------------------------------------------------------
 -- 4. ROW LEVEL SECURITY
 -- ---------------------------------------------------------------------
@@ -111,11 +98,22 @@ alter table public.profiles enable row level security;
 alter table public.rooms    enable row level security;
 alter table public.bookings enable row level security;
 
+-- Table-level grants: RLS policies only decide WHICH ROWS a role can
+-- touch — the role still needs baseline permission on the table itself,
+-- or every request is rejected before RLS is ever evaluated (Postgres
+-- error 42501, "permission denied for table ..."). Supabase normally
+-- sets these up automatically, but they're spelled out explicitly here
+-- so a from-scratch run of this script can't silently skip them.
+grant usage on schema public to authenticated;
+grant select, update on public.profiles to authenticated;
+grant select, insert, update, delete on public.rooms to authenticated;
+grant select, insert, update, delete on public.bookings to authenticated;
+
 -- Profiles: everyone signed in can read profiles (needed to show "booked by"),
 -- but can only update their own non-role fields; only admins manage roles.
 drop policy if exists "profiles_select_all" on public.profiles;
 create policy "profiles_select_all" on public.profiles
-  for select using (auth.role() = 'authenticated');
+  for select using (auth.uid() is not null);
 
 drop policy if exists "profiles_update_admin_only" on public.profiles;
 create policy "profiles_update_admin_only" on public.profiles
@@ -124,7 +122,7 @@ create policy "profiles_update_admin_only" on public.profiles
 -- Rooms: any signed-in user can view; only admins can add/edit/delete.
 drop policy if exists "rooms_select_all" on public.rooms;
 create policy "rooms_select_all" on public.rooms
-  for select using (auth.role() = 'authenticated');
+  for select using (auth.uid() is not null);
 
 drop policy if exists "rooms_write_admin_only" on public.rooms;
 create policy "rooms_write_admin_only" on public.rooms
@@ -135,7 +133,7 @@ create policy "rooms_write_admin_only" on public.rooms
 -- their own bookings; admins may create/edit/delete any booking.
 drop policy if exists "bookings_select_all" on public.bookings;
 create policy "bookings_select_all" on public.bookings
-  for select using (auth.role() = 'authenticated');
+  for select using (auth.uid() is not null);
 
 drop policy if exists "bookings_insert_own_or_admin" on public.bookings;
 create policy "bookings_insert_own_or_admin" on public.bookings
@@ -150,7 +148,30 @@ create policy "bookings_delete_own_or_admin" on public.bookings
   for delete using (user_id = auth.uid() or public.is_admin());
 
 -- ---------------------------------------------------------------------
--- 5. SEED (optional) — a couple of sample rooms
+-- 5. OVERLAP PREVENTION (belt-and-braces, deliberately LAST)
+-- ---------------------------------------------------------------------
+-- The app checks for conflicts in JavaScript before inserting, but that
+-- check-then-insert has a small race window if two people submit at the
+-- exact same moment. This constraint makes the database itself refuse
+-- any overlapping time range for the same room, so a double-booking is
+-- never physically possible even if the client-side check is bypassed
+-- or racy.
+--
+-- This runs LAST and on its own transaction boundary intentionally: if
+-- your bookings table already has overlapping test data, THIS statement
+-- (and only this one) will fail — it can no longer take the RLS
+-- policies above down with it. If it fails, clean up the overlapping
+-- rows in Table Editor and re-run just this block by itself.
+alter table public.bookings drop constraint if exists bookings_no_overlap;
+alter table public.bookings
+  add constraint bookings_no_overlap
+  exclude using gist (
+    room_id with =,
+    tstzrange(start_time, end_time, '[)') with &&
+  );
+
+-- ---------------------------------------------------------------------
+-- 6. SEED (optional) — a couple of sample rooms
 -- ---------------------------------------------------------------------
 insert into public.rooms (name, location, capacity, description)
 values
@@ -167,8 +188,10 @@ on conflict do nothing;
 --        update public.profiles set role = 'admin' where id =
 --          (select id from auth.users where email = 'admin@example.com');
 --
--- Note: if you're re-running this on a database that already has test
--- bookings with overlapping times, the new bookings_no_overlap
--- constraint at the bottom will fail to apply until those overlaps are
--- removed. On a fresh project this just works.
+-- Note: section 5 (overlap prevention) is deliberately last and runs
+-- separately from RLS setup. If you're re-running this on a database
+-- with pre-existing overlapping test bookings, ONLY that final
+-- statement will fail — your policies above will already be applied
+-- successfully by that point. Clean up the overlaps in Table Editor
+-- and re-run just the section 5 block on its own.
 -- ---------------------------------------------------------------------
