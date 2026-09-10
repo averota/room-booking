@@ -273,6 +273,11 @@ a:hover { color: var(--accent-dark); }
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   padding: 0 24px;
+  min-height: 64px;
+}
+
+.app-nav .container-fluid {
+  min-height: 64px;
 }
 
 @media (min-width: 768px) {
@@ -282,8 +287,11 @@ a:hover { color: var(--accent-dark); }
   #navLinks {
     position: absolute;
     left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
+    top: 0;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    transform: translateX(-50%);
     margin: 0 !important;
   }
   #navLinks .navbar-nav {
@@ -417,7 +425,6 @@ a:hover { color: var(--accent-dark); }
 /* Calendar                                                         */
 /* ---------------------------------------------------------------- */
 .calendar-card {
-  height: 100vh;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
