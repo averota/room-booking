@@ -18,9 +18,11 @@
       <span class="mark">R</span> Roombook
     </a>
     <div class="d-flex align-items-center gap-3 order-md-3">
-      <span class="role-badge admin" id="roleBadge">Admin</span>
+      <!-- hidden -->
+      <span class="role-badge" id="roleBadge" style="display: none;">Member</span>
       <div class="d-flex align-items-center gap-2">
-        <span class="mark" id="userAvatar" style="background:var(--ink);">?</span>
+        <!-- Display set to none for #userAvatar -->
+        <span class="mark" id="userAvatar" style="display: none; background:var(--ink);">?</span> 
         <span id="userName" style="font-size:0.9rem; font-weight:600;"></span>
       </div>
       <button class="btn btn-sm btn-outline-secondary" id="logoutBtn">Log out</button>

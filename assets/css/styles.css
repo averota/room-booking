@@ -565,14 +565,8 @@ a:hover { color: var(--accent-dark); }
 }
 .booking-row:last-child { border-bottom: none; }
 
-.booking-row .time {
-  font-weight: 700;
-  font-size: 0.85rem;
-  color: var(--ink);
-  min-width: 118px;
-}
 .booking-row .topic { font-weight: 600; }
-.booking-row .booked-by { color: var(--ink-faint); font-size: 0.8rem; }
+.booking-row .booked-by, .booking-row .time { color: var(--ink-faint); font-size: 0.7rem; }
 
 .badge-soft-accent { background: var(--accent-soft); color: var(--accent-dark); }
 .badge-soft-warn { background: var(--warning-soft); color: var(--warning); }

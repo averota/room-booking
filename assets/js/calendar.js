@@ -228,13 +228,16 @@ function renderBookingRow(b) {
 
   row.innerHTML = `
     <div>
-      <div class="time">${formatTime(new Date(b.start_time))} – ${formatTime(new Date(b.end_time))}</div>
       <div class="topic">${escapeHtml(b.topic)}</div>
       <div class="booked-by">
-        Booked by ${escapeHtml(bookedByName)}
+        <i class="bi bi-clock me-1"></i>
+        ${formatTime(new Date(b.start_time))} – ${formatTime(new Date(b.end_time))}
+        |
+        <i class="bi bi-person text-muted"></i>
+        ${escapeHtml(bookedByName)}
         ${b.recurrence_group_id ? `<span class="badge badge-soft-accent ms-1">${recurrenceLabel(b.recurrence_rule)}</span>` : ''}
       </div>
-      ${b.invitees ? `<div class="invitee-row">${inviteeChipsHtml(b.invitees)}</div>` : ''}
+      ${b.invitees ? `<div class="invitee-row">${inviteeChipsHtml(b.invitees)}</div>` : 'Unknown invitees'}
     </div>
     <div class="d-flex flex-column gap-1 align-items-end" style="min-width:110px;"></div>
   `;
@@ -243,7 +246,8 @@ function renderBookingRow(b) {
   if (canManage) {
     const editBtn = document.createElement('button');
     editBtn.className = 'btn btn-sm btn-outline-accent';
-    editBtn.textContent = 'Edit';
+    editBtn.innerHTML = '<i class="bi bi-pencil"></i>';
+    editBtn.title = 'Edit';
     editBtn.addEventListener('click', () => {
       dayModal.hide();
       openBookingModal(new Date(b.start_time), b);
@@ -252,7 +256,8 @@ function renderBookingRow(b) {
 
     const cancelBtn = document.createElement('button');
     cancelBtn.className = 'btn btn-sm btn-outline-danger';
-    cancelBtn.textContent = 'Cancel';
+    cancelBtn.innerHTML = '<i class="bi bi-trash"></i>';
+    cancelBtn.title = 'Cancel';
     cancelBtn.addEventListener('click', () => confirmCancel(b));
     actions.appendChild(cancelBtn);
   } else {
