@@ -193,6 +193,76 @@ a:hover { color: var(--accent-dark); }
   margin-bottom: 16px;
 }
 
+/* Password field with show/hide toggle */
+.password-field {
+  position: relative;
+}
+.password-field .form-control {
+  padding-right: 44px;
+}
+.password-toggle-btn {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: var(--ink-faint);
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.password-toggle-btn:hover {
+  color: var(--ink-soft);
+  background: var(--bg);
+}
+.password-toggle-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.password-toggle-btn svg {
+  width: 18px;
+  height: 18px;
+}
+.password-toggle-btn .icon-eye-off {
+  display: none;
+}
+.password-toggle-btn.is-visible .icon-eye {
+  display: none;
+}
+.password-toggle-btn.is-visible .icon-eye-off {
+  display: inline-flex;
+}
+
+/* Remember me checkbox */
+.remember-me-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 0;
+}
+.remember-me-row .form-check-input {
+  margin-left: 0;
+  cursor: pointer;
+}
+.remember-me-row .form-check-input:checked {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+.remember-me-row .form-check-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.remember-me-row .form-check-label {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
 /* ---------------------------------------------------------------- */
 /* App shell                                                        */
 /* ---------------------------------------------------------------- */
