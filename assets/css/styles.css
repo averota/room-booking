@@ -275,6 +275,22 @@ a:hover { color: var(--accent-dark); }
   padding: 0 24px;
 }
 
+@media (min-width: 768px) {
+  .app-nav .container-fluid {
+    position: relative;
+  }
+  #navLinks {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    margin: 0 !important;
+  }
+  #navLinks .navbar-nav {
+    margin: 0 !important;
+  }
+}
+
 .app-nav .navbar-brand {
   font-family: var(--font-display);
   font-weight: 700;
@@ -310,13 +326,31 @@ a:hover { color: var(--accent-dark); }
   color: var(--warning);
 }
 
+#navLinks .navbar-nav {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
 .nav-link.app-link {
   color: var(--ink-soft);
   font-weight: 600;
   font-size: 0.92rem;
+  padding: 7px 16px !important;
+  border-radius: 999px;
+  transition: background .12s ease, color .12s ease;
 }
-.nav-link.app-link.active, .nav-link.app-link:hover {
-  color: var(--accent);
+.nav-link.app-link:hover {
+  color: var(--accent-dark);
+  background: var(--bg);
+}
+.nav-link.app-link.active {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+}
+.nav-link.app-link.active:hover {
+  background: var(--accent-soft);
 }
 
 .page-wrap {
@@ -383,6 +417,7 @@ a:hover { color: var(--accent-dark); }
 /* Calendar                                                         */
 /* ---------------------------------------------------------------- */
 .calendar-card {
+  height: 100vh;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
