@@ -227,40 +227,60 @@ function showConfirmDialog({ title, message, confirmLabel = 'Confirm', danger = 
 }
 
 // ---------------------------------------------------------------------
-// Weekend handling for recurring bookings
+// Weekend + holiday handling for recurring bookings
 // ---------------------------------------------------------------------
 
-/** Walks a date backward off Saturday/Sunday (whichever are ignored) onto the last non-ignored weekday. */
-function shiftAwayFromIgnoredWeekend(date, ignoreSaturday, ignoreSunday) {
-  const d = new Date(date);
-  let guard = 0;
-  while (guard < 7) {
+/**
+ * Builds a "is this date blocked?" predicate from the recurrence options.
+ * `holidaySet` is a Set of yyyy-mm-dd strings (see dateKey).
+ */
+function makeRecurrenceBlockedFn({ ignoreSaturday, ignoreSunday, ignoreHoliday, holidaySet }) {
+  return (d) => {
     const day = d.getDay(); // 0 = Sun, 6 = Sat
-    if ((day === 6 && ignoreSaturday) || (day === 0 && ignoreSunday)) {
-      d.setDate(d.getDate() - 1);
-      guard++;
-      continue;
-    }
-    break;
+    if (ignoreSaturday && day === 6) return true;
+    if (ignoreSunday && day === 0) return true;
+    if (ignoreHoliday && holidaySet && holidaySet.has(dateKey(d))) return true;
+    return false;
+  };
+}
+
+/**
+ * Walks a date forward or backward, one day at a time, off any date the
+ * `isBlocked` predicate flags (weekend and/or holiday), landing on the
+ * closest allowed day in that direction. `direction` is 'backward'
+ * (default — move to the previous allowed day) or 'forward'.
+ */
+function shiftAwayFromBlockedDates(date, isBlocked, direction) {
+  const d = new Date(date);
+  const step = direction === 'forward' ? 1 : -1;
+  let guard = 0;
+  while (guard < 14 && isBlocked(d)) {
+    d.setDate(d.getDate() + step);
+    guard++;
   }
   return d;
 }
 
 /**
- * Re-dates every occurrence that falls on an ignored weekend day to the
- * closest earlier weekday. If two occurrences land on the same shifted
- * date (e.g. a daily series with both weekend days ignored can push a
- * Saturday and Sunday occurrence both back onto the same Friday), the
- * later duplicate is dropped rather than double-booking the same slot.
+ * Re-dates every occurrence that falls on a blocked day (ignored weekend
+ * day and/or holiday) to the nearest allowed day in the chosen direction.
+ * If two occurrences land on the same shifted date (e.g. a daily series
+ * with both weekend days ignored can push a Saturday and Sunday
+ * occurrence both onto the same Friday), the later duplicate is dropped
+ * rather than double-booking the same slot.
+ *
+ * `options`: { ignoreSaturday, ignoreSunday, ignoreHoliday, holidaySet, direction }
  */
-function applyWeekendSkip(occurrences, ignoreSaturday, ignoreSunday) {
-  if (!ignoreSaturday && !ignoreSunday) return occurrences;
+function applyRecurrenceAdjustments(occurrences, options) {
+  const { ignoreSaturday, ignoreSunday, ignoreHoliday } = options;
+  if (!ignoreSaturday && !ignoreSunday && !ignoreHoliday) return occurrences;
 
+  const isBlocked = makeRecurrenceBlockedFn(options);
   const seen = new Set();
   const result = [];
   for (const occ of occurrences) {
     const duration = occ.end.getTime() - occ.start.getTime();
-    const shiftedStart = shiftAwayFromIgnoredWeekend(occ.start, ignoreSaturday, ignoreSunday);
+    const shiftedStart = shiftAwayFromBlockedDates(occ.start, isBlocked, options.direction);
     const key = shiftedStart.getTime();
     if (seen.has(key)) continue;
     seen.add(key);
@@ -304,4 +324,35 @@ function suggestedTimeRange(date) {
   startHour = Math.min(Math.max(startHour, 0), 22); // keep room for a 1hr slot before midnight
   const endHour = startHour + 1;
   return { start: `${pad2(startHour)}:00`, end: `${pad2(endHour)}:00` };
+}
+
+// ---------------------------------------------------------------------
+// Holiday spreadsheet import (CSV/XLSX) — row normalization only.
+// The actual file parsing (SheetJS) lives in holidays.js since it's
+// tied to that page; this just cleans up whatever rows come out of it.
+// ---------------------------------------------------------------------
+
+/**
+ * Normalizes one parsed spreadsheet row into { dateKey, description, remark }
+ * or null if the row has no usable date. Column names are matched
+ * case-insensitively so "Date", "date", " DATE " all work.
+ */
+function normalizeHolidayRow(row) {
+  const keys = Object.keys(row);
+  const findKey = (name) => keys.find((k) => k.trim().toLowerCase() === name);
+
+  const dateRaw = row[findKey('date')];
+  const description = String(row[findKey('description')] ?? '').trim();
+  const remark = String(row[findKey('remark')] ?? '').trim();
+
+  let dateObj = null;
+  if (dateRaw instanceof Date && !isNaN(dateRaw.getTime())) {
+    dateObj = dateRaw;
+  } else if (typeof dateRaw === 'string' && dateRaw.trim()) {
+    const parsed = new Date(dateRaw.trim());
+    if (!isNaN(parsed.getTime())) dateObj = parsed;
+  }
+
+  if (!dateObj || !description) return null;
+  return { dateKey: dateKey(dateObj), description, remark };
 }

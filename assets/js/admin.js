@@ -20,6 +20,7 @@ async function init() {
 
   document.getElementById('userName').textContent = me.profile.full_name || me.email;
   document.getElementById('userAvatar').textContent = initials(me.profile.full_name || me.email);
+  applyRoleVisibility(me.profile.role);
   wireLogout(document.getElementById('logoutBtn'));
 
   roomModal = new bootstrap.Modal(document.getElementById('roomModal'));

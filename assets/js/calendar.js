@@ -9,6 +9,8 @@ const state = {
   viewYear: new Date().getFullYear(),
   viewMonth: new Date().getMonth(), // 0-indexed
   bookings: [],       // bookings loaded for the visible grid, selected room only
+  holidays: [],       // holidays loaded for the visible grid (global, not per-room)
+  holidaySet: new Set(), // dateKey lookup for the visible grid's holidays
   editingBookingId: null
 };
 
@@ -124,20 +126,34 @@ async function loadBookingsAndRender() {
   if (!state.selectedRoomId) return;
   const { gridStart, gridEnd } = gridRange();
 
-  const { data, error } = await sb
-    .from('bookings')
-    .select('id, room_id, user_id, topic, start_time, end_time, recurrence_group_id, recurrence_rule, invitees, profiles(full_name)')
-    .eq('room_id', state.selectedRoomId)
-    .lt('start_time', gridEnd.toISOString())
-    .gt('end_time', gridStart.toISOString())
-    .order('start_time', { ascending: true });
+  const [bookingsResult, holidaysResult] = await Promise.all([
+    sb
+      .from('bookings')
+      .select('id, room_id, user_id, topic, start_time, end_time, recurrence_group_id, recurrence_rule, invitees, profiles(full_name)')
+      .eq('room_id', state.selectedRoomId)
+      .lt('start_time', gridEnd.toISOString())
+      .gt('end_time', gridStart.toISOString())
+      .order('start_time', { ascending: true }),
+    sb
+      .from('holidays')
+      .select('id, date, description, remark')
+      .gte('date', dateKey(gridStart))
+      .lt('date', dateKey(gridEnd))
+      .order('date', { ascending: true })
+  ]);
 
-  if (error) {
-    showToast('Could not load bookings: ' + error.message, 'danger');
+  if (bookingsResult.error) {
+    showToast('Could not load bookings: ' + bookingsResult.error.message, 'danger');
     return;
   }
+  if (holidaysResult.error) {
+    // Non-fatal: the calendar still works without holiday shading.
+    console.error('Could not load holidays', holidaysResult.error);
+  }
 
-  state.bookings = data || [];
+  state.bookings = bookingsResult.data || [];
+  state.holidays = holidaysResult.data || [];
+  state.holidaySet = new Set(state.holidays.map((h) => h.date));
   renderCalendar();
 }
 
@@ -161,10 +177,18 @@ function renderCalendar() {
     const key = dateKey(cellDate);
     const isOutside = cellDate.getMonth() !== state.viewMonth;
     const isToday = key === todayKey;
+    const holiday = state.holidaySet.has(key) ? state.holidays.find((h) => h.date === key) : null;
 
     const cell = document.createElement('div');
-    cell.className = 'day-cell' + (isOutside ? ' outside' : '') + (isToday ? ' today' : '');
+    cell.className = 'day-cell' + (isOutside ? ' outside' : '') + (isToday ? ' today' : '') + (holiday ? ' holiday' : '');
     cell.innerHTML = `<div class="date-num">${cellDate.getDate()}</div>`;
+
+    if (holiday) {
+      const holidayChip = document.createElement('div');
+      holidayChip.className = 'day-chip holiday-chip';
+      holidayChip.innerHTML = `<i class="bi bi-flag-fill"></i> ${escapeHtml(holiday.description)}`;
+      cell.appendChild(holidayChip);
+    }
 
     const dayBookings = (byDate[key] || []).sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
     const maxShown = 3;
@@ -195,6 +219,15 @@ function openDayModal(date) {
   document.getElementById('dayModalRoom').textContent = state.rooms.find((r) => r.id === state.selectedRoomId)?.name || '';
 
   const key = dateKey(date);
+  const holiday = state.holidays.find((h) => h.date === key) || null;
+  const banner = document.getElementById('dayModalHolidayBanner');
+  if (holiday) {
+    banner.innerHTML = `<i class="bi bi-flag-fill me-1"></i><strong>${escapeHtml(holiday.description)}</strong>${holiday.remark ? ` — ${escapeHtml(holiday.remark)}` : ''}`;
+    banner.style.display = 'block';
+  } else {
+    banner.style.display = 'none';
+  }
+
   const list = state.bookings
     .filter((b) => dateKey(new Date(b.start_time)) === key)
     .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
@@ -237,7 +270,7 @@ function renderBookingRow(b) {
         ${escapeHtml(bookedByName)}
         ${b.recurrence_group_id ? `<span class="badge badge-soft-accent ms-1">${recurrenceLabel(b.recurrence_rule)}</span>` : ''}
       </div>
-      ${b.invitees ? `<div class="invitee-row">${inviteeChipsHtml(b.invitees)}</div>` : 'Unknown invitees'}
+      ${b.invitees ? `<div class="invitee-row">${inviteeChipsHtml(b.invitees)}</div>` : ''}
     </div>
     <div class="d-flex flex-column gap-1 align-items-end" style="min-width:110px;"></div>
   `;
@@ -376,6 +409,8 @@ function openBookingModal(defaultDate, existingBooking = null) {
     document.getElementById('editRecurrenceNote').style.display = 'none';
     document.getElementById('ignoreSaturday').checked = true;
     document.getElementById('ignoreSunday').checked = true;
+    document.getElementById('ignoreHoliday').checked = true;
+    document.getElementById('directionBackward').checked = true;
   }
 
   document.getElementById('recurrenceUntil').min = document.getElementById('bookingDate').value;
@@ -421,7 +456,9 @@ async function onSubmitBooking(e) {
       const untilStr = document.getElementById('recurrenceUntil').value;
       const ignoreSaturday = document.getElementById('ignoreSaturday').checked;
       const ignoreSunday = document.getElementById('ignoreSunday').checked;
-      await submitCreate(start, end, topic, invitees, rule === 'none' ? null : rule, untilStr, ignoreSaturday, ignoreSunday);
+      const ignoreHoliday = document.getElementById('ignoreHoliday').checked;
+      const direction = document.querySelector('input[name="recurrenceDirection"]:checked')?.value || 'backward';
+      await submitCreate(start, end, topic, invitees, rule === 'none' ? null : rule, untilStr, { ignoreSaturday, ignoreSunday, ignoreHoliday, direction });
     }
   } finally {
     submitBtn.disabled = false;
@@ -453,7 +490,7 @@ async function submitEdit(bookingId, start, end, topic, invitees) {
   await loadBookingsAndRender();
 }
 
-async function submitCreate(start, end, topic, invitees, rule, untilStr, ignoreSaturday, ignoreSunday) {
+async function submitCreate(start, end, topic, invitees, rule, untilStr, weekendHolidayOptions) {
   if (rule && !untilStr) {
     showToast('Please choose an end date for the recurrence.', 'danger');
     return;
@@ -465,7 +502,11 @@ async function submitCreate(start, end, topic, invitees, rule, untilStr, ignoreS
 
   let { occurrences, truncated } = expandOccurrences(start, end, rule, untilStr);
   if (rule) {
-    occurrences = applyWeekendSkip(occurrences, ignoreSaturday, ignoreSunday);
+    let holidaySet = new Set();
+    if (weekendHolidayOptions.ignoreHoliday) {
+      holidaySet = await fetchHolidaySet(start, combineDateTime(untilStr, '23:59'));
+    }
+    occurrences = applyRecurrenceAdjustments(occurrences, { ...weekendHolidayOptions, holidaySet });
   }
   const conflicts = await checkConflicts(state.selectedRoomId, occurrences, null);
 
@@ -507,6 +548,26 @@ async function submitCreate(start, end, topic, invitees, rule, untilStr, ignoreS
 /** Postgres exclusion-constraint violation code — our belt-and-braces DB guard against overlaps. */
 function isOverlapViolation(error) {
   return error && (error.code === '23P01' || /exclusion/i.test(error.message || ''));
+}
+
+/**
+ * Fetches holidays overlapping [fromDate, toDate] as a dateKey Set, for
+ * use by the recurrence "ignore holiday" adjustment. Separate from the
+ * calendar's own state.holidaySet because a recurring series can span
+ * far beyond whatever month is currently on screen.
+ */
+async function fetchHolidaySet(fromDate, toDate) {
+  const { data, error } = await sb
+    .from('holidays')
+    .select('date')
+    .gte('date', dateKey(fromDate))
+    .lte('date', dateKey(toDate));
+
+  if (error) {
+    console.error('Could not load holidays for recurrence check', error);
+    return new Set();
+  }
+  return new Set((data || []).map((h) => h.date));
 }
 
 async function checkConflicts(roomId, occurrences, excludeBookingId) {

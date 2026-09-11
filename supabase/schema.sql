@@ -71,7 +71,20 @@ create table if not exists public.rooms (
 );
 
 -- ---------------------------------------------------------------------
--- 3. BOOKINGS
+-- 3. HOLIDAYS
+-- ---------------------------------------------------------------------
+create table if not exists public.holidays (
+  id          uuid primary key default gen_random_uuid(),
+  date        date not null unique,
+  description text not null,
+  remark      text not null default '',
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists idx_holidays_date on public.holidays (date);
+
+-- ---------------------------------------------------------------------
+-- 4. BOOKINGS
 -- ---------------------------------------------------------------------
 create table if not exists public.bookings (
   id                   uuid primary key default gen_random_uuid(),
@@ -92,10 +105,11 @@ create index if not exists idx_bookings_user on public.bookings (user_id);
 create index if not exists idx_bookings_group on public.bookings (recurrence_group_id);
 
 -- ---------------------------------------------------------------------
--- 4. ROW LEVEL SECURITY
+-- 5. ROW LEVEL SECURITY
 -- ---------------------------------------------------------------------
 alter table public.profiles enable row level security;
 alter table public.rooms    enable row level security;
+alter table public.holidays enable row level security;
 alter table public.bookings enable row level security;
 
 -- Table-level grants: RLS policies only decide WHICH ROWS a role can
@@ -107,6 +121,7 @@ alter table public.bookings enable row level security;
 grant usage on schema public to authenticated;
 grant select, update on public.profiles to authenticated;
 grant select, insert, update, delete on public.rooms to authenticated;
+grant select, insert, update, delete on public.holidays to authenticated;
 grant select, insert, update, delete on public.bookings to authenticated;
 
 -- Profiles: everyone signed in can read profiles (needed to show "booked by"),
@@ -126,6 +141,15 @@ create policy "rooms_select_all" on public.rooms
 
 drop policy if exists "rooms_write_admin_only" on public.rooms;
 create policy "rooms_write_admin_only" on public.rooms
+  for all using (public.is_admin()) with check (public.is_admin());
+
+-- Holidays: everyone signed in can view (informational); only admins manage them.
+drop policy if exists "holidays_select_all" on public.holidays;
+create policy "holidays_select_all" on public.holidays
+  for select using (auth.uid() is not null);
+
+drop policy if exists "holidays_write_admin_only" on public.holidays;
+create policy "holidays_write_admin_only" on public.holidays
   for all using (public.is_admin()) with check (public.is_admin());
 
 -- Bookings: any signed-in user can view all bookings (so the calendar shows
@@ -148,7 +172,7 @@ create policy "bookings_delete_own_or_admin" on public.bookings
   for delete using (user_id = auth.uid() or public.is_admin());
 
 -- ---------------------------------------------------------------------
--- 5. OVERLAP PREVENTION (belt-and-braces, deliberately LAST)
+-- 6. OVERLAP PREVENTION (belt-and-braces, deliberately LAST)
 -- ---------------------------------------------------------------------
 -- The app checks for conflicts in JavaScript before inserting, but that
 -- check-then-insert has a small race window if two people submit at the
@@ -171,7 +195,7 @@ alter table public.bookings
   );
 
 -- ---------------------------------------------------------------------
--- 6. SEED (optional) — a couple of sample rooms
+-- 7. SEED (optional) — a couple of sample rooms
 -- ---------------------------------------------------------------------
 insert into public.rooms (name, location, capacity, description)
 values

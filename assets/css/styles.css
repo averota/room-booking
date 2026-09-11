@@ -26,6 +26,9 @@
   --warning:        #A6741E;
   --warning-soft:   #F5EBD6;
 
+  --holiday:        #8A6D1B;
+  --holiday-soft:   #FBF1D2;
+
   --other-chip:     #EEF1F4;
   --other-chip-ink: #4B5563;
 
@@ -180,6 +183,11 @@ a:hover { color: var(--accent-dark); }
 }
 .btn-outline-accent:hover {
   background: var(--accent);
+  color: #fff;
+}
+.btn-check:checked + .btn-outline-accent {
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
 
@@ -553,6 +561,32 @@ a:hover { color: var(--accent-dark); }
   color: var(--ink-faint);
 }
 
+/* Holidays: "professional yellow" — informational, wins over weekend tint */
+.calendar-grid .day-cell.holiday,
+.calendar-grid .day-cell.outside.holiday {
+  background: var(--holiday-soft);
+}
+.calendar-grid .day-cell.holiday:not(.today) .date-num,
+.calendar-grid .day-cell.outside.holiday .date-num {
+  color: var(--holiday);
+}
+.calendar-grid .day-cell.holiday:hover { background: #F5E7B8; }
+
+.day-chip.holiday-chip {
+  background: var(--holiday-soft);
+  color: var(--holiday);
+  border: 1px solid rgba(138, 109, 27, 0.25);
+}
+
+.holiday-banner {
+  background: var(--holiday-soft);
+  color: var(--holiday);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 0.88rem;
+  margin-bottom: 14px;
+}
+
 /* ---------------------------------------------------------------- */
 /* Booking list / modal                                             */
 /* ---------------------------------------------------------------- */
@@ -622,6 +656,15 @@ a:hover { color: var(--accent-dark); }
 }
 .status-dot.active { background: var(--success); }
 .status-dot.inactive { background: var(--ink-faint); }
+
+.upload-hint {
+  font-size: 0.84rem;
+  color: var(--ink-faint);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
 
 .spinner-inline {
   width: 1rem; height: 1rem;
