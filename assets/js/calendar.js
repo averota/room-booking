@@ -70,14 +70,40 @@ async function loadRooms() {
 function renderRoomPicker() {
   const wrap = document.getElementById('roomPicker');
   wrap.innerHTML = '';
+
+  const selectedRoom = state.rooms.find(r => r.id === state.selectedRoomId);
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'dropdown';
+
+  const toggleBtn = document.createElement('button');
+  toggleBtn.type = 'button';
+  toggleBtn.id = 'roomPickerToggleBtn';
+  toggleBtn.className = 'btn btn-outline-accent btn-sm dropdown-toggle';
+  toggleBtn.setAttribute('data-bs-toggle', 'dropdown');
+  toggleBtn.setAttribute('aria-expanded', 'false');
+  toggleBtn.textContent = selectedRoom
+    ? `${selectedRoom.name} · ${selectedRoom.capacity} seats`
+    : 'Select room';
+
+  const menu = document.createElement('ul');
+  menu.className = 'dropdown-menu';
+  menu.setAttribute('aria-labelledby', 'roomPickerToggleBtn');
+
   state.rooms.forEach((room) => {
+    const li = document.createElement('li');
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'room-pill' + (room.id === state.selectedRoomId ? ' active' : '');
+    btn.className = 'dropdown-item' + (room.id === state.selectedRoomId ? ' active' : '');
     btn.innerHTML = `${escapeHtml(room.name)} <span class="cap">· ${room.capacity} seats</span>`;
-    btn.addEventListener('click', () => selectRoom(room.id));
-    wrap.appendChild(btn);
+    btn.addEventListener('click', () => selectRoom(room.id)); // same click logic, untouched
+    li.appendChild(btn);
+    menu.appendChild(li);
   });
+
+  dropdown.appendChild(toggleBtn);
+  dropdown.appendChild(menu);
+  wrap.appendChild(dropdown);
 }
 
 function selectRoom(roomId) {
@@ -105,7 +131,6 @@ function wireCalendarToolbar() {
     state.viewMonth = now.getMonth();
     loadBookingsAndRender();
   });
-  document.getElementById('newBookingBtn').addEventListener('click', () => openBookingModal(new Date()));
 }
 
 function shiftMonth(delta) {

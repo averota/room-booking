@@ -10,75 +10,142 @@
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <link href="../assets/css/styles.css" rel="stylesheet">
+
+<!-- SheetJS (xlsx) for parsing CSV, XLSX, and XLS, and for exporting -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
-<nav class="navbar navbar-expand-md app-nav">
-  <div class="container-fluid" style="max-width:1180px; margin:0 auto;">
-    <a class="navbar-brand" href="dashboard.html">
-      <span class="mark">R</span> Roombook
-    </a>
-    <div class="d-flex align-items-center gap-3 order-md-3">
-      <span class="role-badge" id="roleBadge" style="display: none;">Member</span>
-      <div class="d-flex align-items-center gap-2">
-        <span class="mark" id="userAvatar" style="display: none; background:var(--ink);">?</span>
-        <span id="userName" style="font-size:0.9rem; font-weight:600;"></span>
-      </div>
-      <button class="btn btn-sm btn-outline-secondary" id="logoutBtn">Log out</button>
-    </div>
-    <button class="navbar-toggler order-md-2" type="button" data-bs-toggle="collapse" data-bs-target="#navLinks">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse order-md-2" id="navLinks">
-      <ul class="navbar-nav me-auto mb-2 mb-md-0 ms-md-4">
-        <li class="nav-item"><a class="nav-link app-link" href="dashboard.html">Calendar</a></li>
-        <li class="nav-item" data-admin-only style="display:none;"><a class="nav-link app-link" href="rooms.html">Manage rooms</a></li>
-        <li class="nav-item" data-admin-only style="display:none;"><a class="nav-link app-link active" href="holidays.html">Manage holidays</a></li>
-      </ul>
-    </div>
-  </div>
-</nav>
+<div id="navMount"></div>
 
 <div class="page-wrap">
 
   <div class="room-meta-bar">
     <div>
-      <h2>Manage holidays</h2>
-      <div class="meta">Public holidays show on everyone's calendar as information only.</div>
+      <h2>Holidays</h2>
+      <div class="meta">Public holidays show on everyone's calendar as <strong>information only</strong>.</div>
     </div>
-    <div class="d-flex gap-2">
-      <input type="file" id="holidayFileInput" accept=".csv,.xlsx,.xls" class="d-none">
-      <button class="btn btn-outline-accent" id="uploadHolidayBtn"><i class="bi bi-upload me-1"></i>Upload Excel/CSV</button>
-      <button class="btn btn-accent" id="addHolidayBtn">+ Add holiday</button>
+    <div class="d-flex gap-2 flex-wrap">
+      <button id="refreshListBtn" class="btn btn-ghost btn-sm btn-icon" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+        Refresh
+      </button>
+      <div class="dropdown">
+        <button class="btn btn-accent btn-sm btn-icon dropdown-toggle" type="button" id="addHolidayDropdownBtn" data-bs-toggle="dropdown" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          Add holiday
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="addHolidayDropdownBtn">
+          <li>
+            <button type="button" class="dropdown-item d-flex align-items-center gap-2" id="addHolidayBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+              Create new
+            </button>
+          </li>
+          <li>
+            <button type="button" class="dropdown-item d-flex align-items-center gap-2" id="toggleUploadBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+              Upload Excel/CSV
+            </button>
+          </li>
+        </ul>
+      </div>
     </div>
   </div>
 
-  <div class="upload-hint mb-3">
-    File needs columns named <strong>Date</strong>, <strong>Description</strong>, and optionally <strong>Remark</strong>. Uploading a date that already exists updates that holiday instead of duplicating it.
-  </div>
+  <div id="errorContainer" class="panel panel-error hidden"></div>
+  <div id="statusContainer" class="panel panel-status hidden"></div>
 
   <div id="adminGate" class="empty-state" style="display:none;">
     You need admin access to view this page. <a href="dashboard.html">Back to calendar</a>.
   </div>
 
-  <div class="room-manage-card" id="holidayTableWrap">
-    <table class="table mb-0 align-middle">
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Description</th>
-          <th>Remark</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="holidayTableBody"></tbody>
-    </table>
-    <div class="empty-state" id="holidaysEmptyState" style="display:none;">No holidays yet — add one, or upload a spreadsheet.</div>
+  <!-- Primary view: the current holiday list, loaded immediately on page open -->
+  <div id="viewListContainer" class="room-manage-card table-card">
+    <div class="table-toolbar">
+      <span id="viewListMeta" class="file-meta"></span>
+    </div>
+    <div class="table-scroll">
+      <table id="viewListTable" class="data-table">
+        <thead id="viewListHeader"></thead>
+        <tbody id="viewListBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Secondary: upload panel, collapsed until "Upload Excel/CSV" is clicked -->
+  <div id="uploadPanel" class="room-manage-card hidden" style="padding: 1.25rem;">
+    <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+      <div>
+        <h2 class="h6 fw-bold mb-1">Upload holidays</h2>
+        <p class="meta mb-0">Preview a file, then append or overwrite the <strong>holidays</strong> table.</p>
+      </div>
+      <button id="backToListBtn" class="btn btn-ghost btn-sm btn-icon" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        Back to list
+      </button>
+    </div>
+
+    <div class="upload-hint mt-3">
+      File needs columns named <strong>Date</strong>, <strong>Description</strong>, and optionally <strong>Remark</strong>. Rows with a date that already exists in the table are skipped by "Append" and are shown in the preview like any other row.
+    </div>
+
+    <div id="dropzone" class="dropzone mt-3">
+      <input type="file" id="fileInput" accept=".csv, .xlsx, .xls" style="display:none;">
+      <label for="fileInput">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+        </svg>
+        <span>
+          <span class="primary">Click to upload or drag and drop</span><br>
+          <span class="secondary">CSV, XLSX, or XLS files</span>
+        </span>
+      </label>
+    </div>
+
+    <div id="summaryContainer" class="stat-strip hidden mt-3"></div>
+
+    <div id="tableContainer" class="room-manage-card table-card hidden mt-3">
+      <div class="table-toolbar">
+        <span id="fileMeta" class="file-meta"></span>
+        <div class="btn-group-actions">
+          <button id="appendBtn" class="btn-emerald btn btn-sm btn-icon" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            Append new records
+          </button>
+          <button id="overwriteBtn" class="btn-amber btn btn-sm btn-icon" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+            Overwrite entire table
+          </button>
+          <button id="clearBtn" class="btn-ghost btn btn-sm" type="button">Discard preview</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table id="csvTable" class="data-table">
+          <thead id="tableHeader"></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="dangerZone" class="danger-zone">
+    <h3>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+      Danger zone
+    </h3>
+    <p>Permanently delete every holiday record. This does not affect existing room bookings. Use this to start a fresh holiday list from scratch.</p>
+    <div class="actions">
+      <button id="clearHolidaysBtn" class="btn btn-rose btn-sm btn-icon" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        Clear all holidays
+      </button>
+    </div>
   </div>
 
 </div>
 
-<!-- Add / edit holiday modal -->
+<!-- Add / edit holiday modal (single-record form, used from the list view) -->
 <div class="modal fade" id="holidayModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -112,7 +179,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="../assets/js/nav.js"></script>
 <script src="../assets/js/supabaseClient.js"></script>
 <script src="../assets/js/auth.js"></script>
 <script src="../assets/js/utils.js"></script>

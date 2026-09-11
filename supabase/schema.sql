@@ -172,7 +172,126 @@ create policy "bookings_delete_own_or_admin" on public.bookings
   for delete using (user_id = auth.uid() or public.is_admin());
 
 -- ---------------------------------------------------------------------
--- 6. OVERLAP PREVENTION (belt-and-braces, deliberately LAST)
+-- 6. HOLIDAYS BULK-UPLOAD RPCs (atomic append / overwrite / clear)
+-- ---------------------------------------------------------------------
+-- Direct insert/update/delete on public.holidays already works today —
+-- the grants and the holidays_write_admin_only RLS policy above already
+-- restrict writes to admins. These RPCs exist purely for ATOMICITY:
+-- a PL/pgSQL function body runs as one transaction, so the bulk
+-- "Append" and "Overwrite" actions in holidays.js can't fail halfway
+-- through and leave the table half-deleted or half-inserted the way a
+-- sequence of separate client-side .delete()/.insert() calls can.
+--
+-- p_rows is a jsonb array of {date, description, remark} objects —
+-- pass currentDataset.validRows straight through from holidays.js,
+-- e.g. supabase.rpc('admin_append_holidays', { p_rows: validRows }).
+
+create or replace function public.admin_append_holidays(p_rows jsonb)
+returns integer
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_inserted integer;
+begin
+  if not public.is_admin() then
+    raise exception 'Only admins can bulk-append holidays';
+  end if;
+
+  with incoming as (
+    select
+      (r ->> 'date')::date         as date,
+      r ->> 'description'          as description,
+      coalesce(r ->> 'remark', '') as remark
+    from jsonb_array_elements(p_rows) as r
+  ),
+  inserted as (
+    insert into public.holidays (date, description, remark)
+    select i.date, i.description, i.remark
+    from incoming i
+    where not exists (
+      select 1 from public.holidays h where h.date = i.date
+    )
+    on conflict (date) do nothing
+    returning 1
+  )
+  select count(*) into v_inserted from inserted;
+
+  return v_inserted;
+end;
+$$;
+
+revoke all on function public.admin_append_holidays(jsonb) from public;
+grant execute on function public.admin_append_holidays(jsonb) to authenticated;
+
+
+create or replace function public.admin_overwrite_holidays(p_rows jsonb)
+returns integer
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_inserted integer;
+begin
+  if not public.is_admin() then
+    raise exception 'Only admins can overwrite the holidays table';
+  end if;
+
+  delete from public.holidays where true;  -- delete all existing holidays
+
+  with incoming as (
+    select
+      (r ->> 'date')::date         as date,
+      r ->> 'description'          as description,
+      coalesce(r ->> 'remark', '') as remark
+    from jsonb_array_elements(p_rows) as r
+  ),
+  inserted as (
+    insert into public.holidays (date, description, remark)
+    select date, description, remark
+    from incoming
+    -- defensive only: the client already de-dupes by date before
+    -- calling this, but a stray duplicate in p_rows shouldn't blow up
+    -- the whole transaction on the unique(date) constraint.
+    on conflict (date) do nothing
+    returning 1
+  )
+  select count(*) into v_inserted from inserted;
+
+  return v_inserted;
+end;
+$$;
+
+revoke all on function public.admin_overwrite_holidays(jsonb) from public;
+grant execute on function public.admin_overwrite_holidays(jsonb) to authenticated;
+
+
+create or replace function public.admin_clear_holidays()
+returns integer
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_deleted integer;
+begin
+  if not public.is_admin() then
+    raise exception 'Only admins can clear the holidays table';
+  end if;
+
+  with deleted as (
+    delete from public.holidays returning 1
+  )
+  select count(*) into v_deleted from deleted;
+
+  return v_deleted;
+end;
+$$;
+
+revoke all on function public.admin_clear_holidays() from public;
+grant execute on function public.admin_clear_holidays() to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 7. OVERLAP PREVENTION (belt-and-braces, deliberately LAST)
 -- ---------------------------------------------------------------------
 -- The app checks for conflicts in JavaScript before inserting, but that
 -- check-then-insert has a small race window if two people submit at the
@@ -195,7 +314,7 @@ alter table public.bookings
   );
 
 -- ---------------------------------------------------------------------
--- 7. SEED (optional) — a couple of sample rooms
+-- 8. SEED (optional) — a couple of sample rooms
 -- ---------------------------------------------------------------------
 insert into public.rooms (name, location, capacity, description)
 values

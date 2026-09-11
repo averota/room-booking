@@ -412,7 +412,7 @@ a:hover { color: var(--accent-dark); }
 
 .room-meta-bar {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px;
@@ -727,3 +727,189 @@ a:hover { color: var(--accent-dark); }
   gap: 4px;
   margin-top: 6px;
 }
+/* ---------------------------------------------------------------- */
+/* Inline panels (error / status banners) — bulk upload flows        */
+/* ---------------------------------------------------------------- */
+.hidden { display: none !important; }
+
+.panel {
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  margin-bottom: 18px;
+}
+.panel-error {
+  background: var(--danger-soft);
+  border: 1px solid #E3B7A8;
+  color: var(--danger);
+  white-space: pre-line;
+}
+.panel-status {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--ink);
+}
+
+/* ---------------------------------------------------------------- */
+/* Button variants used by list / preview toolbars                   */
+/* ---------------------------------------------------------------- */
+.btn-icon { display: inline-flex; align-items: center; gap: 6px; }
+.btn-icon svg { width: 15px; height: 15px; flex: none; }
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--ink-soft);
+}
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent-dark); background: var(--bg); }
+
+.btn-emerald { background: var(--success); border-color: var(--success); color: #fff; }
+.btn-emerald:hover { background: #245F49; border-color: #245F49; color: #fff; }
+.btn-emerald:disabled { opacity: .6; }
+
+.btn-amber { background: var(--warning); border-color: var(--warning); color: #fff; }
+.btn-amber:hover { background: #8A5F17; border-color: #8A5F17; color: #fff; }
+.btn-amber:disabled { opacity: .6; }
+
+.btn-rose { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn-rose:hover { background: #944334; border-color: #944334; color: #fff; }
+.btn-rose:disabled { opacity: .6; }
+
+.btn-icon-only {
+  background: transparent; border: none; padding: 4px;
+  color: var(--ink-faint); border-radius: var(--radius-sm);
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.btn-icon-only svg { width: 16px; height: 16px; }
+.btn-icon-only:hover { background: var(--bg); color: var(--accent-dark); }
+
+/* Dropdown menu (e.g. "Add holiday" -> Create new / Upload Excel/CSV) */
+.dropdown-menu {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card);
+  padding: 6px;
+  min-width: 200px;
+}
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 0.88rem;
+  color: var(--ink);
+}
+.dropdown-item svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  color: var(--ink-faint);
+}
+.dropdown-item:hover, .dropdown-item:focus {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+.dropdown-item:hover svg, .dropdown-item:focus svg {
+  color: var(--accent-dark);
+}
+
+/* ---------------------------------------------------------------- */
+/* Data table / preview grid (upload flows, admin list views)        */
+/* ---------------------------------------------------------------- */
+.table-card { overflow: hidden; }
+.table-toolbar {
+  padding: 0.9rem 1.1rem;
+  border-bottom: 1px solid var(--border);
+  display: flex; flex-wrap: wrap; gap: 0.75rem;
+  justify-content: space-between; align-items: center;
+  background: var(--bg);
+}
+.file-meta { font-size: 0.75rem; color: var(--ink-faint); }
+.btn-group-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+.table-scroll { overflow: auto; max-height: 65vh; }
+
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.data-table thead th {
+  position: sticky; top: 0;
+  background: var(--bg); color: var(--ink-faint);
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em;
+  text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.data-table tbody td {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table tbody tr:hover { background: var(--bg); }
+
+.idx-col { color: var(--ink-faint); text-align: right; width: 1%; padding-left: 1rem; padding-right: 1rem; }
+.actions-col { width: 1%; white-space: nowrap; }
+.actions-wrap { display: flex; gap: 4px; justify-content: flex-end; }
+
+/* ---------------------------------------------------------------- */
+/* Summary stat strip (upload preview counts)                        */
+/* ---------------------------------------------------------------- */
+.stat-strip { display: flex; flex-wrap: wrap; gap: 0.4rem 1.25rem; align-items: center; font-size: 0.78rem; color: var(--ink-faint); padding: 0.1rem; }
+.stat-strip .stat-item { display: flex; align-items: baseline; gap: 0.35rem; white-space: nowrap; }
+.stat-strip .stat-value { font-weight: 700; font-size: 0.85rem; color: var(--ink); }
+.num-emerald { color: var(--success); }
+.num-rose { color: var(--danger); }
+.num-amber { color: var(--warning); }
+
+/* ---------------------------------------------------------------- */
+/* Dropzone (file upload)                                            */
+/* ---------------------------------------------------------------- */
+.dropzone {
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  transition: border-color .12s ease, background .12s ease;
+}
+.dropzone:hover { border-color: var(--accent); }
+.dropzone label { cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 0.6rem; margin: 0; }
+.dropzone svg { width: 30px; height: 30px; color: var(--ink-faint); }
+.dropzone .primary { font-weight: 600; color: var(--accent-dark); }
+.dropzone .secondary { font-size: 0.78rem; color: var(--ink-faint); }
+.dropzone.compact { padding: 1rem 1.25rem; }
+.dropzone.compact svg { width: 20px; height: 20px; }
+.dropzone.compact label { flex-direction: row; gap: 0.5rem; }
+
+/* ---------------------------------------------------------------- */
+/* Danger zone                                                       */
+/* ---------------------------------------------------------------- */
+.danger-zone {
+  border: 1px solid #E3B7A8;
+  background: var(--danger-soft);
+  border-radius: var(--radius-md);
+  padding: 1.1rem 1.25rem;
+  margin-top: 1.5rem;
+}
+.danger-zone h3 {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.95rem; margin: 0 0 6px; color: var(--danger);
+}
+.danger-zone h3 svg { width: 18px; height: 18px; }
+.danger-zone p { font-size: 0.84rem; color: var(--ink-soft); margin: 0 0 12px; }
+
+/* ---------------------------------------------------------------- */
+/* Lightweight edit-row modal (unsaved upload-preview rows)           */
+/* ---------------------------------------------------------------- */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(27,36,48,0.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1090; padding: 1rem;
+}
+.modal-box {
+  background: var(--surface); border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px rgba(27,36,48,0.25);
+  padding: 1.25rem; width: 100%; max-width: 380px;
+}
+.modal-box h3 { font-size: 1rem; margin: 0 0 0.9rem; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+.edit-form .req-text { color: var(--danger); }
